@@ -1,3 +1,4 @@
+//lib/screens/client_detail_screen.dart
 import 'package:flutter/material.dart';
 
 class ClientDetailScreen extends StatelessWidget {

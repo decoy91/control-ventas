@@ -1,3 +1,4 @@
+//lib/repositories/producto_repository.dart
 import 'package:control_ventapps/db/database_helper.dart';
 import 'package:control_ventapps/models/producto.dart';
 

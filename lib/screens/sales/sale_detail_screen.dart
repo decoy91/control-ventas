@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:confetti/confetti.dart';
-
 import '../../models/venta.dart';
 import '../../models/abono.dart';
 import '../../repositories/venta_repository.dart';
@@ -9,7 +8,6 @@ import '../../repositories/abono_repository.dart';
 
 class SaleDetailScreen extends StatefulWidget {
   final Venta venta;
-
   const SaleDetailScreen({super.key, required this.venta});
 
   @override
@@ -19,15 +17,10 @@ class SaleDetailScreen extends StatefulWidget {
 class _SaleDetailScreenState extends State<SaleDetailScreen> {
   final _ventaRepo = VentaRepository();
   final _abonoRepo = AbonoRepository();
-
   late ConfettiController _confettiController;
   late Venta _venta;
   List<Abono> abonos = [];
   bool cargando = true;
-
-  bool get estaLiquidada => _venta.liquidada;
-  int get totalAbonado => abonos.fold(0, (sum, a) => sum + a.monto);
-  int get pendiente => _venta.total - totalAbonado;
 
   @override
   void initState() {
@@ -44,354 +37,176 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
   }
 
   Future<void> cargarAbonos() async {
-    if (_venta.id == null) {
-      setState(() => cargando = false);
-      return;
-    }
-    try {
-      setState(() => cargando = true);
-      abonos = await _abonoRepo.obtenerAbonosPorVenta(_venta.id!);
-    } catch (e) {
-      _msg('Error al cargar abonos: $e');
-      abonos = [];
-    } finally {
-      setState(() => cargando = false);
-    }
+    setState(() => cargando = true);
+    abonos = await _abonoRepo.obtenerAbonosPorVenta(_venta.id!);
+    setState(() => cargando = false);
   }
 
-  void agregarOEditarAbono([Abono? abono]) {
+  int get totalAbonado => abonos.fold(0, (sum, a) => sum + a.monto);
+  int get pendiente => _venta.total - totalAbonado;
+  double get porcentajePago => (_venta.total > 0) ? (totalAbonado / _venta.total) : 0;
+
+  void _abrirModalAbono([Abono? abono]) {
     final ctrl = TextEditingController(text: abono?.monto.toString() ?? '');
-
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(abono == null ? 'Agregar abono' : 'Editar abono'),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Monto',
-            prefixIcon: Icon(Icons.attach_money),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade400),
-            onPressed: () async {
-              final monto = int.tryParse(ctrl.text);
-              if (monto == null || monto <= 0) {
-                _msg('Ingresa un monto válido');
-                return;
-              }
-              final montoMax = abono == null ? pendiente : pendiente + abono.monto;
-              if (monto > montoMax) {
-                _msg('El abono no puede ser mayor al pendiente (\$$montoMax)');
-                return;
-              }
-
-              try {
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 24, right: 24, top: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
+            const SizedBox(height: 20),
+            Text(abono == null ? 'Nuevo Abono' : 'Editar Abono', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            TextField(
+              controller: ctrl,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: 'Monto a pagar',
+                prefixIcon: const Icon(Icons.attach_money),
+                suffixText: 'Max: \$$pendiente',
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () async {
+                final monto = int.tryParse(ctrl.text);
+                if (monto == null || monto <= 0 || monto > (abono == null ? pendiente : pendiente + abono.monto)) return;
+                
                 if (abono == null) {
-                  final nuevo = Abono(
-                    ventaId: _venta.id!,
-                    monto: monto,
-                    fecha: DateTime.now(),
-                  );
-                  await _abonoRepo.insertarAbono(nuevo);
+                  await _abonoRepo.insertarAbono(Abono(ventaId: _venta.id!, monto: monto, fecha: DateTime.now()));
                 } else {
-                  final editado = Abono(
-                    id: abono.id,
-                    ventaId: _venta.id!,
-                    monto: monto,
-                    fecha: abono.fecha,
-                  );
-                  await _abonoRepo.actualizarAbono(editado);
+                  await _abonoRepo.actualizarAbono(Abono(id: abono.id, ventaId: _venta.id!, monto: monto, fecha: abono.fecha));
                 }
-
+                
                 await cargarAbonos();
-
                 final nuevaLiquidada = totalAbonado >= _venta.total;
-
-                _venta = Venta(
-                  id: _venta.id,
-                  clienteId: _venta.clienteId,
-                  clienteNombre: _venta.clienteNombre,
-                  productoId: _venta.productoId,
-                  productoNombre: _venta.productoNombre,
-                  total: _venta.total,
-                  pagado: totalAbonado,
-                  liquidada: nuevaLiquidada,
-                  fecha: _venta.fecha,
-                  nota: _venta.nota,
-                );
-
+                _venta = _venta.copyWith(pagado: totalAbonado, liquidada: nuevaLiquidada);
                 await _ventaRepo.actualizarVenta(_venta);
-
+                
                 if (nuevaLiquidada) _confettiController.play();
-
-                if (mounted) Navigator.pop(context);
-              } catch (e) {
-                _msg('Error al guardar abono: $e');
-              }
-            },
-            child: const Text('Guardar'),
-          ),
-        ],
+                // ignore: use_build_context_synchronously
+                Navigator.pop(context);
+              },
+              child: const Text('Confirmar Pago'),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
       ),
     );
   }
 
-  void eliminarAbono(Abono abono) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Eliminar abono'),
-        content: Text('¿Seguro que quieres eliminar el abono de \$${abono.monto}?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Eliminar'),
+  @override
+  Widget build(BuildContext context) {
+    final f = DateFormat('dd MMM, yyyy');
+    return Scaffold(
+      appBar: AppBar(title: const Text('Detalles de Venta')),
+      body: Stack(
+        children: [
+          ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              _buildHeaderCard(),
+              const SizedBox(height: 24),
+              _buildProgressCard(),
+              const SizedBox(height: 24),
+              const Text('Historial de Abonos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              _buildAbonosList(f),
+            ],
           ),
+          Align(alignment: Alignment.topCenter, child: ConfettiWidget(confettiController: _confettiController, blastDirectionality: BlastDirectionality.explosive)),
         ],
       ),
-    );
-
-    if (confirm != true) return;
-
-    try {
-      await _abonoRepo.eliminarAbono(abono.id!);
-      await cargarAbonos();
-
-      _venta = Venta(
-        id: _venta.id,
-        clienteId: _venta.clienteId,
-        clienteNombre: _venta.clienteNombre,
-        productoId: _venta.productoId,
-        productoNombre: _venta.productoNombre,
-        total: _venta.total,
-        pagado: totalAbonado,
-        liquidada: false,
-        fecha: _venta.fecha,
-        nota: _venta.nota,
-      );
-
-      await _ventaRepo.actualizarVenta(_venta);
-    } catch (e) {
-      _msg('Error al eliminar abono: $e');
-    }
-  }
-
-  void _msg(String text) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final f = DateFormat('dd/MM/yyyy');
-
-    return Stack(
-      children: [
-        Scaffold(
-          appBar: AppBar(title: const Text('Detalle de venta')),
-          floatingActionButton: pendiente > 0 && !estaLiquidada
-              ? FloatingActionButton(
-                  onPressed: () => agregarOEditarAbono(),
-                  child: const Icon(Icons.add),
-                )
-              : null,
-          body: cargando
-              ? const Center(child: CircularProgressIndicator())
-              : Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Cliente / Producto
-                      Text(
-                        _venta.clienteNombre,
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
-                      Text(_venta.productoNombre),
-
-                      const SizedBox(height: 8),
-
-                      // Nota
-                      if (_venta.nota!.isNotEmpty)
-                        Card(
-                          child: ListTile(
-                            leading: const Icon(Icons.note),
-                            title: const Text('Nota'),
-                            subtitle: Text(_venta.nota ?? ''),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.edit),
-                              onPressed: () {
-                                final ctrl = TextEditingController(text: _venta.nota);
-                                showDialog(
-                                  context: context,
-                                  builder: (_) => AlertDialog(
-                                    title: const Text('Editar nota'),
-                                    content: TextField(
-                                      controller: ctrl,
-                                      maxLines: 3,
-                                      decoration: const InputDecoration(labelText: 'Nota'),
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () => Navigator.pop(context),
-                                        child: const Text('Cancelar'),
-                                      ),
-                                      ElevatedButton(
-                                        onPressed: () async {
-                                          _venta = Venta(
-                                            id: _venta.id,
-                                            clienteId: _venta.clienteId,
-                                            clienteNombre: _venta.clienteNombre,
-                                            productoId: _venta.productoId,
-                                            productoNombre: _venta.productoNombre,
-                                            total: _venta.total,
-                                            pagado: totalAbonado,
-                                            liquidada: _venta.liquidada,
-                                            fecha: _venta.fecha,
-                                            nota: ctrl.text.trim(),
-                                          );
-                                          await _ventaRepo.actualizarVenta(_venta);
-                                          setState(() {});
-                                          // ignore: use_build_context_synchronously
-                                          Navigator.pop(context);
-                                        },
-                                        child: const Text('Guardar'),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-
-                      const SizedBox(height: 16),
-
-                      // Resumen
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              _Resumen('Total', _venta.total),
-                              _Resumen('Pagado', totalAbonado),
-                              _Resumen('Pendiente', pendiente),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      if (estaLiquidada)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Row(
-                            children: const [
-                              Icon(Icons.check_circle, color: Colors.green),
-                              SizedBox(width: 8),
-                              Text(
-                                'Venta liquidada',
-                                style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                      const SizedBox(height: 24),
-
-                      // Abonos
-                      const Text('Abonos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      Expanded(
-                        child: abonos.isEmpty
-                            ? const Center(child: Text('Sin abonos'))
-                            : ListView.builder(
-                                itemCount: abonos.length,
-                                itemBuilder: (_, i) {
-                                  final a = abonos[i];
-                                  return Card(
-                                    child: ListTile(
-                                      title: Text('\$${a.monto}'),
-                                      subtitle: Text(f.format(a.fecha)),
-                                      trailing: !estaLiquidada
-                                          ? IconButton(
-                                              icon: const Icon(Icons.more_vert),
-                                              onPressed: () {
-                                                showModalBottomSheet(
-                                                  context: context,
-                                                  builder: (_) => SafeArea(
-                                                    child: Wrap(
-                                                      children: [
-                                                        ListTile(
-                                                          leading: const Icon(Icons.edit),
-                                                          title: const Text('Editar'),
-                                                          onTap: () {
-                                                            Navigator.pop(context);
-                                                            agregarOEditarAbono(a);
-                                                          },
-                                                        ),
-                                                        ListTile(
-                                                          leading: const Icon(Icons.delete, color: Colors.red),
-                                                          title: const Text('Eliminar'),
-                                                          onTap: () {
-                                                            Navigator.pop(context);
-                                                            eliminarAbono(a);
-                                                          },
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                            )
-                                          : null,
-                                    ),
-                                  );
-                                },
-                              ),
-                      ),
-                    ],
-                  ),
-                ),
-        ),
-
-        // Confetti
-        Align(
-          alignment: Alignment.topCenter,
-          child: ConfettiWidget(
-            confettiController: _confettiController,
-            blastDirectionality: BlastDirectionality.explosive,
-            shouldLoop: false,
-            colors: const [Colors.green, Colors.blue, Colors.orange, Colors.purple],
-          ),
-        ),
-      ],
+      floatingActionButton: !_venta.liquidada 
+        ? FloatingActionButton.extended(onPressed: () => _abrirModalAbono(), label: const Text('Abonar'), icon: const Icon(Icons.add))
+        : null,
     );
   }
-}
 
-// =========================
-// Widgets
-// =========================
-class _Resumen extends StatelessWidget {
-  final String label;
-  final int value;
+  Widget _buildHeaderCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(backgroundColor: Theme.of(context).primaryColor.withValues(alpha: 0.1), child: Icon(Icons.person, color: Theme.of(context).primaryColor)),
+                const SizedBox(width: 12),
+                Text(_venta.clienteNombre, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const Divider(height: 32),
+            Text('Producto: ${_venta.productoNombre}', style: const TextStyle(fontSize: 16)),
+            if (_venta.nota != null && _venta.nota!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text('Nota: ${_venta.nota}', style: const TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 
-  const _Resumen(this.label, this.value);
+  Widget _buildProgressCard() {
+    return Card(
+      color: Theme.of(context).primaryColor,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _miniStat('Total', '\$${_venta.total}', Colors.white70),
+                _miniStat('Pendiente', '\$$pendiente', Colors.white),
+              ],
+            ),
+            const SizedBox(height: 20),
+            LinearProgressIndicator(
+              value: porcentajePago,
+              backgroundColor: Colors.white24,
+              color: Colors.white,
+              minHeight: 8,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            const SizedBox(height: 12),
+            Text('${(porcentajePago * 100).toInt()}% Pagado', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _miniStat(String label, String value, Color color) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label),
-        Text('\$$value', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        Text(label, style: TextStyle(color: color, fontSize: 14)),
+        Text(value, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
       ],
+    );
+  }
+
+  Widget _buildAbonosList(DateFormat f) {
+    if (abonos.isEmpty) return const Center(child: Text('No hay abonos registrados todavía.'));
+    return Column(
+      children: abonos.map((a) => Card(
+        margin: const EdgeInsets.only(bottom: 12),
+        child: ListTile(
+          leading: const CircleAvatar(backgroundColor: Colors.green, child: Icon(Icons.arrow_downward, color: Colors.green, size: 20)),
+          title: Text('\$${a.monto}', style: const TextStyle(fontWeight: FontWeight.bold)),
+          subtitle: Text(f.format(a.fecha)),
+          trailing: !_venta.liquidada ? IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => _abrirModalAbono(a)) : null,
+        ),
+      )).toList(),
     );
   }
 }

@@ -1,3 +1,4 @@
+//lib/models/venta.dart
 class Venta {
   final int? id;
   final int clienteId;

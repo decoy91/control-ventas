@@ -14,15 +14,12 @@ class ClientsScreen extends StatefulWidget {
 
 class _ClientsScreenState extends State<ClientsScreen> {
   final _repo = ClienteRepository();
-
-  List<Cliente> clientes = [];
-
-  bool mostrarFormulario = false;
-  Cliente? clienteEditando;
-
-  final nombreCtrl = TextEditingController();
-  final telefonoCtrl = TextEditingController();
-  final notasCtrl = TextEditingController();
+  List<Cliente> _todosLosClientes = [];
+  List<Cliente> _clientesFiltrados = [];
+  
+  final _nombreCtrl = TextEditingController();
+  final _telefonoCtrl = TextEditingController();
+  final _searchCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -30,369 +27,231 @@ class _ClientsScreenState extends State<ClientsScreen> {
     _cargarClientes();
   }
 
-  Future<void> _cargarClientes() async {
-    final data = await _repo.obtenerClientes();
-    setState(() => clientes = data);
-  }
-
   @override
   void dispose() {
-    nombreCtrl.dispose();
-    telefonoCtrl.dispose();
-    notasCtrl.dispose();
+    _nombreCtrl.dispose();
+    _telefonoCtrl.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
-  // =========================
-  // WhatsApp
-  // =========================
-  void abrirWhatsApp(String telefono) async {
-    final numero = telefono.replaceAll(RegExp(r'\D'), '');
-    final appUri = Uri.parse("whatsapp://send?phone=$numero");
-    final webUri = Uri.parse("https://wa.me/$numero");
-
-    if (await canLaunchUrl(appUri)) {
-      await launchUrl(appUri, mode: LaunchMode.externalApplication);
-    } else if (await canLaunchUrl(webUri)) {
-      await launchUrl(webUri, mode: LaunchMode.externalApplication);
-    } else {
-      // ignore: use_build_context_synchronously
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo abrir WhatsApp')),
-      );
-    }
-  }
-
-  // =========================
-  // Formulario
-  // =========================
-  void abrirFormulario([Cliente? cliente]) {
-    clienteEditando = cliente;
-
-    if (cliente != null) {
-      nombreCtrl.text = cliente.nombre;
-      telefonoCtrl.text = cliente.telefono;
-      notasCtrl.text = cliente.notas ?? '';
-    } else {
-      nombreCtrl.clear();
-      telefonoCtrl.clear();
-      notasCtrl.clear();
-    }
-
-    setState(() => mostrarFormulario = true);
-  }
-
-  void cerrarFormulario() {
+  Future<void> _cargarClientes() async {
+    final data = await _repo.obtenerClientes();
     setState(() {
-      mostrarFormulario = false;
-      clienteEditando = null;
+      _todosLosClientes = data;
+      _clientesFiltrados = data;
     });
   }
 
-  Future<void> guardarCliente() async {
-    if (nombreCtrl.text.trim().isEmpty) return;
-
-    if (clienteEditando != null) {
-      clienteEditando!
-        ..nombre = nombreCtrl.text.trim()
-        ..telefono = telefonoCtrl.text.trim()
-        ..notas = notasCtrl.text.trim();
-
-      await _repo.actualizarCliente(clienteEditando!);
-    } else {
-      final nuevo = Cliente(
-        nombre: nombreCtrl.text.trim(),
-        telefono: telefonoCtrl.text.trim(),
-        notas: notasCtrl.text.trim(),
-      );
-
-      await _repo.insertarCliente(nuevo);
-    }
-
-    cerrarFormulario();
-    _cargarClientes();
+  void _filtrarClientes(String query) {
+    setState(() {
+      _clientesFiltrados = _todosLosClientes
+          .where((c) =>
+              c.nombre.toLowerCase().contains(query.toLowerCase()) ||
+              c.telefono.contains(query))
+          .toList();
+    });
   }
 
-  void confirmarEliminarCliente(Cliente cliente) {
-    showDialog(
-      context: context,
-      builder: (_) {
-        return AlertDialog(
-          title: const Text('Eliminar cliente'),
-          content: Text(
-            '¿Estás seguro de que deseas eliminar a "${cliente.nombre}"?\n'
-            'Esta acción no se puede deshacer.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () async {
-                await _repo.eliminarCliente(cliente.id!);
-                // ignore: use_build_context_synchronously
-                Navigator.pop(context);
-                _cargarClientes();
-              },
-              child: const Text('Eliminar'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // =========================
-  // Agregar desde contactos
-  // =========================
-Future<void> agregarDesdeContactos() async {
-  final status = await Permission.contacts.request();
-  if (!status.isGranted) return;
-
-  try {
-    final contacto = await ContactsService.openDeviceContactPicker();
-    if (contacto != null) {
-      // Abre el formulario primero
-      abrirFormulario();
-      
-      // Luego rellena los campos
-      setState(() {
-        nombreCtrl.text = contacto.displayName ?? '';
-        if (contacto.phones != null && contacto.phones!.isNotEmpty) {
-          telefonoCtrl.text = contacto.phones!.first.value ?? '';
-        }
-      });
-    }
-  } catch (e) {
-    // ignore: use_build_context_synchronously
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Error al abrir contactos: $e')),
-    );
-  }
-}
-
-
-  // =========================
-  // Modal de opciones del cliente
-  // =========================
-  void mostrarOpcionesCliente(Cliente cliente) {
-    showModalBottomSheet(
-      context: context,
-      builder: (_) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.edit),
-              title: const Text('Editar'),
-              onTap: () {
-                Navigator.pop(context);
-                abrirFormulario(cliente);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete, color: Colors.red),
-              title: const Text('Eliminar'),
-              onTap: () {
-                Navigator.pop(context);
-                confirmarEliminarCliente(cliente);
-              },
-            ),
-            if (cliente.telefono.isNotEmpty)
-              ListTile(
-                leading: const Icon(Icons.wechat, color: Colors.green),
-                title: const Text('Abrir WhatsApp'),
-                onTap: () {
-                  Navigator.pop(context);
-                  abrirWhatsApp(cliente.telefono);
-                },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // =========================
-  // Detalle cliente
-  // =========================
-  void verDetalleCliente(Cliente cliente) {
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (_) {
-        return Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.person, size: 28),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      cliente.nombre,
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              if (cliente.telefono.isNotEmpty)
-                ListTile(
-                  leading: const Icon(Icons.phone),
-                  title: Text(cliente.telefono),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.wechat, color: Colors.green),
-                    onPressed: () => abrirWhatsApp(cliente.telefono),
-                  ),
-                ),
-              if ((cliente.notas ?? '').isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Notas',
-                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade700),
-                ),
-                const SizedBox(height: 4),
-                Text(cliente.notas!),
-              ],
-              const SizedBox(height: 24),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // =========================
-  // UI
-  // =========================
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Clientes')),
-      floatingActionButton: PopupMenuButton(
-        icon: const Icon(Icons.add),
-        itemBuilder: (_) => [
-          const PopupMenuItem(
-            value: 'manual',
-            child: Text('Agregar cliente manualmente'),
-          ),
-          const PopupMenuItem(
-            value: 'contacto',
-            child: Text('Agregar desde contactos'),
-          ),
-        ],
-        onSelected: (value) {
-          if (value == 'manual') {
-            abrirFormulario();
-          } else if (value == 'contacto') {
-            agregarDesdeContactos();
+  Future<void> _agregarDesdeContactos() async {
+    final status = await Permission.contacts.request();
+    if (status.isGranted) {
+      try {
+        final contacto = await ContactsService.openDeviceContactPicker();
+        if (contacto != null) {
+          final nombre = contacto.displayName ?? '';
+          String telefono = '';
+          if (contacto.phones != null && contacto.phones!.isNotEmpty) {
+            telefono = contacto.phones!.first.value?.replaceAll(RegExp(r'\s+'), '') ?? '';
           }
-        },
-      ),
-      body: Stack(
-        children: [
-          buildLista(),
-          if (mostrarFormulario) ...[
-            GestureDetector(
-              onTap: cerrarFormulario,
-              child: Container(color: Colors.black.withValues(alpha: 0.4)),
-            ),
-            Center(child: buildFormulario()),
-          ],
+          setState(() {
+            _nombreCtrl.text = nombre;
+            _telefonoCtrl.text = telefono;
+          });
+          _abrirFormulario();
+        }
+      } catch (e) {
+        _notificar('Error al acceder a contactos: $e');
+      }
+    }
+  }
+
+  void _abrirWhatsApp(String tel) async {
+    final num = tel.replaceAll(RegExp(r'\D'), '');
+    final uri = Uri.parse("https://wa.me/$num");
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  // Lógica para eliminar cliente
+  Future<void> _eliminarCliente(int id) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('¿Eliminar cliente?'),
+        content: const Text('Esto no borrará sus ventas, pero ya no aparecerá en esta lista.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('CANCELAR')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('ELIMINAR', style: TextStyle(color: Colors.red))),
         ],
       ),
     );
+
+    if (confirmar == true) {
+      await _repo.eliminarCliente(id);
+      _cargarClientes();
+      if (mounted) Navigator.pop(context); // Cierra el modal de edición
+    }
   }
 
-  Widget buildLista() {
-    if (clientes.isEmpty) return const Center(child: Text('No hay clientes'));
+  void _abrirFormulario([Cliente? cliente]) {
+    if (cliente != null) {
+      _nombreCtrl.text = cliente.nombre;
+      _telefonoCtrl.text = cliente.telefono;
+    }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: clientes.length,
-      itemBuilder: (_, i) {
-        final c = clientes[i];
-        return Card(
-          child: ListTile(
-            leading: const Icon(Icons.person),
-            title: Text(c.nombre),
-            subtitle: c.telefono.isNotEmpty ? Text(c.telefono) : null,
-            onTap: () => verDetalleCliente(c),
-            trailing: IconButton(
-              icon: const Icon(Icons.more_vert),
-              onPressed: () => mostrarOpcionesCliente(c),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget buildFormulario() {
-    return Card(
-      elevation: 8,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          left: 24, right: 24, top: 24
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              clienteEditando == null ? 'Nuevo cliente' : 'Editar cliente',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: nombreCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Nombre',
-                prefixIcon: Icon(Icons.person_outline),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: telefonoCtrl,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Teléfono',
-                prefixIcon: Icon(Icons.phone_outlined),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: notasCtrl,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'Notas',
-                prefixIcon: Icon(Icons.note_outlined),
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(cliente == null ? 'Nuevo Cliente' : 'Editar Cliente', 
+                     style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                if (cliente != null)
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                    onPressed: () => _eliminarCliente(cliente.id!),
+                  ),
+              ],
             ),
             const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: cerrarFormulario,
-                    child: const Text('Cancelar'),
+            TextField(controller: _nombreCtrl, decoration: const InputDecoration(labelText: 'Nombre', prefixIcon: Icon(Icons.person))),
+            const SizedBox(height: 12),
+            TextField(controller: _telefonoCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Teléfono', prefixIcon: Icon(Icons.phone))),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () async {
+                  if (_nombreCtrl.text.trim().isEmpty) return;
+                  if (cliente != null) {
+                    cliente.nombre = _nombreCtrl.text.trim();
+                    cliente.telefono = _telefonoCtrl.text.trim();
+                    await _repo.actualizarCliente(cliente);
+                  } else {
+                    await _repo.insertarCliente(Cliente(nombre: _nombreCtrl.text.trim(), telefono: _telefonoCtrl.text.trim()));
+                  }
+                  _cargarClientes();
+                  // ignore: use_build_context_synchronously
+                  if (mounted) Navigator.pop(context);
+                },
+                child: const Text('Guardar'),
+              ),
+            )
+          ],
+        ),
+      ),
+    ).then((_) {
+      _nombreCtrl.clear();
+      _telefonoCtrl.clear();
+    });
+  }
+
+  void _notificar(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Mis Clientes'),
+        scrolledUnderElevation: 0,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      ),
+      
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _mostrarMenuOpciones(),
+        child: const Icon(Icons.add),
+      ),
+
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: _filtrarClientes,
+              decoration: InputDecoration(
+                hintText: 'Buscar por nombre o número...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchCtrl.text.isNotEmpty 
+                  ? IconButton(icon: const Icon(Icons.clear), onPressed: () { _searchCtrl.clear(); _filtrarClientes(''); }) 
+                  : null,
+                filled: true,
+                fillColor: Colors.white,
+              ),
+            ),
+          ),
+          
+          Expanded(
+            child: _clientesFiltrados.isEmpty
+                ? const Center(child: Text('No se encontraron clientes'))
+                : ListView.builder(
+                    // ✅ EL CAMBIO IMPORTANTE: Padding inferior de 80 para que el FAB no tape nada
+                    padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 80),
+                    itemCount: _clientesFiltrados.length,
+                    itemBuilder: (_, i) {
+                      final c = _clientesFiltrados[i];
+                      return Card(
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                            child: Text(c.nombre.isNotEmpty ? c.nombre[0].toUpperCase() : '?'),
+                          ),
+                          title: Text(c.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text(c.telefono),
+                          trailing: c.telefono.isNotEmpty 
+                            ? IconButton(icon: const Icon(Icons.wechat_rounded, color: Colors.green), onPressed: () => _abrirWhatsApp(c.telefono))
+                            : null,
+                          onTap: () => _abrirFormulario(c),
+                        ),
+                      );
+                    },
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: guardarCliente,
-                    child: const Text('Guardar'),
-                  ),
-                ),
-              ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _mostrarMenuOpciones() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Ingreso manual'),
+              onTap: () { Navigator.pop(context); _abrirFormulario(); },
+            ),
+            ListTile(
+              leading: const Icon(Icons.contact_phone_outlined),
+              title: const Text('Desde contactos del teléfono'),
+              onTap: () { Navigator.pop(context); _agregarDesdeContactos(); },
             ),
           ],
         ),
