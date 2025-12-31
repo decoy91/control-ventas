@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; 
 import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // 🔥 Importado
+import 'package:cloud_firestore/cloud_firestore.dart'; // 🔥 Importado
 import '../models/venta.dart';
 import '../repositories/venta_repository.dart';
 import '../repositories/cliente_repository.dart';
@@ -25,11 +27,54 @@ class _HomeScreenState extends State<HomeScreen> {
   bool cargando = true;
   String filtro = 'todas';
   String busqueda = '';
+  
+  // Variable para la licencia
+  String diasRestantesMsg = "Cargando..."; 
 
   @override
   void initState() {
     super.initState();
     cargarVentas();
+    _obtenerDiasRestantes(); // 🔥 Llamada al iniciar
+  }
+
+  // 🔥 Lógica para calcular días restantes desde Firebase
+  Future<void> _obtenerDiasRestantes() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final codigo = prefs.getString('codigo_licencia');
+
+      if (codigo != null) {
+        final doc = await FirebaseFirestore.instance
+            .collection('licencias')
+            .doc(codigo)
+            .get();
+
+        if (doc.exists) {
+          final Timestamp? fechaExp = doc.data()?['fecha_expiracion'];
+          if (fechaExp != null) {
+            final ahora = DateTime.now();
+            final diferencia = fechaExp.toDate().difference(ahora).inDays;
+            
+            if (mounted) {
+              setState(() {
+                if (diferencia <= 0) {
+                  diasRestantesMsg = "Licencia expirada ⚠️";
+                } else if (diferencia <= 5) {
+                  diasRestantesMsg = "Vence en $diferencia días ⏳";
+                } else {
+                  diasRestantesMsg = "Días de licencia: $diferencia";
+                }
+              });
+            }
+            return;
+          }
+        }
+      }
+      if (mounted) setState(() => diasRestantesMsg = "Sin licencia activa");
+    } catch (e) {
+      if (mounted) setState(() => diasRestantesMsg = "Licencia activa");
+    }
   }
 
   Future<void> cargarVentas() async {
@@ -143,6 +188,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     if (salir == true && mounted) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('activado', false); // Marcamos como no activado
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => const ActivationScreen()),
@@ -201,11 +248,22 @@ class _HomeScreenState extends State<HomeScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Column(
+        Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Hola 👋", style: TextStyle(color: Colors.grey, fontSize: 16)),
-            Text("Mis Ventas", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+            // 🔥 Mostramos los días restantes aquí
+            Text(
+              diasRestantesMsg, 
+              style: TextStyle(
+                color: diasRestantesMsg.contains('expirada') ? Colors.red : Colors.grey.shade600, 
+                fontSize: 13,
+                fontWeight: FontWeight.w500
+              )
+            ),
+            const Text(
+              "Mis Ventas", 
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)
+            ),
           ],
         ),
         Row(
@@ -322,7 +380,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ==========================================
-// WIDGETS DE APOYO ACTUALIZADOS
+// WIDGETS DE APOYO
 // ==========================================
 
 class _StatCard extends StatelessWidget {
@@ -347,7 +405,6 @@ class _StatCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          // 🔥 Fondo tenue cuando no está activo, sólido cuando sí
           color: isActive ? color : color.withOpacity(0.12),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
@@ -361,7 +418,6 @@ class _StatCard extends StatelessWidget {
             Text(
               label, 
               style: TextStyle(
-                // 🔥 Texto del color original siempre para legibilidad
                 color: isActive ? Colors.white : color, 
                 fontWeight: FontWeight.bold, 
                 fontSize: 13

@@ -58,20 +58,61 @@ class VentaRepository {
   // ==========================================
   // ELIMINAR
   // ==========================================
+// ==========================================
+  // ELIMINAR
+  // ==========================================
+  // ==========================================
+  // ELIMINAR (VENTA Y SUS ABONOS)
+  // ==========================================
   Future<void> eliminarVenta(int id) async {
     final db = await _db.database;
-    // 1. Eliminar local
-    await db.delete('ventas', where: 'id = ?', whereArgs: [id]);
     
-    // 2. Eliminar de la nube
-    final codigo = await _getCodigoLicencia();
-    if (codigo != null) {
-      _firestore
-          .collection('licencias')
-          .doc(codigo)
-          .collection('ventas_respaldo')
-          .doc(id.toString())
-          .delete();
+    try {
+      // --- 1. LIMPIEZA LOCAL (SQLite) ---
+      // Borramos primero los abonos de la tabla local vinculados a esta venta
+      await db.delete(
+        'abonos', 
+        where: 'venta_id = ?', 
+        whereArgs: [id]
+      );
+      
+      // Borramos la venta de la tabla local
+      await db.delete(
+        'ventas', 
+        where: 'id = ?', 
+        whereArgs: [id]
+      );
+      
+      // --- 2. LIMPIEZA EN LA NUBE (Firebase) ---
+      final codigo = await _getCodigoLicencia();
+      if (codigo != null) {
+        final ventaRef = _firestore
+            .collection('licencias')
+            .doc(codigo)
+            .collection('ventas_respaldo')
+            .doc(id.toString());
+
+        // Importante: Firebase no borra subcolecciones automáticamente 
+        // cuando borras el documento padre. Hay que borrar los hijos primero.
+        final abonosSnap = await ventaRef.collection('abonos').get();
+        
+        if (abonosSnap.docs.isNotEmpty) {
+          final batch = _firestore.batch();
+          for (var doc in abonosSnap.docs) {
+            batch.delete(doc.reference);
+          }
+          // Ejecutamos el borrado de todos los abonos en la nube
+          await batch.commit();
+        }
+
+        // Finalmente, borramos el documento de la venta en la nube
+        await ventaRef.delete();
+      }
+      
+      print("Venta $id y sus abonos eliminados correctamente de local y nube.");
+      
+    } catch (e) {
+      print("Error al eliminar venta completa: $e");
     }
   }
 
