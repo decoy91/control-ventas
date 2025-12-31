@@ -1,5 +1,7 @@
+import 'package:contacts_service_plus/contacts_service_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../models/cliente.dart';
 import '../repositories/cliente_repository.dart';
 
@@ -46,8 +48,8 @@ class _ClientsScreenState extends State<ClientsScreen> {
   // =========================
   void abrirWhatsApp(String telefono) async {
     final numero = telefono.replaceAll(RegExp(r'\D'), '');
-    final appUri = Uri.parse("whatsapp://send?phone=$numero&text=Hola");
-    final webUri = Uri.parse("https://wa.me/$numero?text=Hola");
+    final appUri = Uri.parse("whatsapp://send?phone=$numero");
+    final webUri = Uri.parse("https://wa.me/$numero");
 
     if (await canLaunchUrl(appUri)) {
       await launchUrl(appUri, mode: LaunchMode.externalApplication);
@@ -144,6 +146,36 @@ class _ClientsScreenState extends State<ClientsScreen> {
       },
     );
   }
+
+  // =========================
+  // Agregar desde contactos
+  // =========================
+Future<void> agregarDesdeContactos() async {
+  final status = await Permission.contacts.request();
+  if (!status.isGranted) return;
+
+  try {
+    final contacto = await ContactsService.openDeviceContactPicker();
+    if (contacto != null) {
+      // Abre el formulario primero
+      abrirFormulario();
+      
+      // Luego rellena los campos
+      setState(() {
+        nombreCtrl.text = contacto.displayName ?? '';
+        if (contacto.phones != null && contacto.phones!.isNotEmpty) {
+          telefonoCtrl.text = contacto.phones!.first.value ?? '';
+        }
+      });
+    }
+  } catch (e) {
+    // ignore: use_build_context_synchronously
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Error al abrir contactos: $e')),
+    );
+  }
+}
+
 
   // =========================
   // Modal de opciones del cliente
@@ -246,9 +278,25 @@ class _ClientsScreenState extends State<ClientsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Clientes')),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => abrirFormulario(),
-        child: const Icon(Icons.add),
+      floatingActionButton: PopupMenuButton(
+        icon: const Icon(Icons.add),
+        itemBuilder: (_) => [
+          const PopupMenuItem(
+            value: 'manual',
+            child: Text('Agregar cliente manualmente'),
+          ),
+          const PopupMenuItem(
+            value: 'contacto',
+            child: Text('Agregar desde contactos'),
+          ),
+        ],
+        onSelected: (value) {
+          if (value == 'manual') {
+            abrirFormulario();
+          } else if (value == 'contacto') {
+            agregarDesdeContactos();
+          }
+        },
       ),
       body: Stack(
         children: [
