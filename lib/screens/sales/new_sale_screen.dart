@@ -155,6 +155,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
       appBar: AppBar(
         title: const Text('Nueva venta'),
         scrolledUnderElevation: 0,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _guardarVenta,
@@ -164,7 +165,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
       body: cargando
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               children: [
                 _selectorCard(
                   label: 'Cliente',
@@ -179,61 +180,128 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                   icon: Icons.shopping_bag_outlined,
                   onTap: _buscarProducto,
                 ),
-                const SizedBox(height: 20),
-                TextField(
+                const SizedBox(height: 24),
+                
+                // 🔥 Campo de Abono con nuevo diseño
+                _buildModernTextField(
+                  label: 'Abono inicial (opcional)',
                   controller: _abonoCtrl,
+                  icon: Icons.attach_money,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Abono inicial (opcional)',
-                    prefixIcon: Icon(Icons.attach_money),
-                  ),
                   onChanged: (v) => setState(() => abono = int.tryParse(v) ?? 0),
                 ),
-                const SizedBox(height: 16),
-                TextField(
+                
+                const SizedBox(height: 20),
+
+                // 🔥 Campo de Nota con nuevo diseño
+                _buildModernTextField(
+                  label: 'Nota o referencia',
                   controller: _notaCtrl,
+                  icon: Icons.description_outlined,
                   maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Nota o referencia',
-                    prefixIcon: Icon(Icons.description_outlined),
-                  ),
                 ),
-                const SizedBox(height: 24),
+
+                const SizedBox(height: 30),
                 _resumenDinamico(),
+                const SizedBox(height: 100), // Espacio para que el FAB no tape el resumen
               ],
             ),
     );
   }
 
-  Widget _selectorCard({required String label, String? seleccionado, required IconData icon, required VoidCallback onTap}) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: seleccionado != null ? Theme.of(context).primaryColor.withValues(alpha: 0.05) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: seleccionado != null ? Theme.of(context).primaryColor : Colors.grey.shade300),
+  // 🔥 Widget para campos de texto con el estilo de los buscadores
+  Widget _buildModernTextField({
+    required String label,
+    required TextEditingController controller,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    int maxLines = 1,
+    Function(String)? onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "  $label",
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey.shade600),
         ),
-        child: Row(
-          children: [
-            Icon(icon, color: seleccionado != null ? Theme.of(context).primaryColor : Colors.grey),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                  Text(seleccionado ?? 'Toca para seleccionar', 
-                       style: TextStyle(fontSize: 16, fontWeight: seleccionado != null ? FontWeight.bold : FontWeight.normal)),
-                ],
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
+            ],
+          ),
+          child: TextField(
+            controller: controller,
+            keyboardType: keyboardType,
+            maxLines: maxLines,
+            onChanged: onChanged,
+            decoration: InputDecoration(
+              prefixIcon: Icon(icon, color: Colors.grey.shade400),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+              hintText: 'Escribe aquí...',
+              hintStyle: TextStyle(color: Colors.grey.shade300, fontSize: 14),
             ),
-            const Icon(Icons.chevron_right, color: Colors.grey),
-          ],
+          ),
         ),
-      ),
+      ],
+    );
+  }
+
+  Widget _selectorCard({required String label, String? seleccionado, required IconData icon, required VoidCallback onTap}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "  $label",
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey.shade600),
+        ),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: seleccionado != null ? Theme.of(context).primaryColor.withOpacity(0.03) : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: seleccionado != null ? Theme.of(context).primaryColor : Colors.transparent),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Icon(icon, color: seleccionado != null ? Theme.of(context).primaryColor : Colors.grey),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    seleccionado ?? 'Toca para seleccionar', 
+                    style: TextStyle(
+                      fontSize: 16, 
+                      fontWeight: seleccionado != null ? FontWeight.bold : FontWeight.normal,
+                      color: seleccionado != null ? Colors.black87 : Colors.grey.shade400
+                    )
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -244,12 +312,22 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
       decoration: BoxDecoration(
         color: Theme.of(context).primaryColor,
         borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Theme.of(context).primaryColor.withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         children: [
           _filaResumen('Total Producto', '\$$total'),
           _filaResumen('Abono Inicial', '-\$$abono'),
-          const Divider(color: Colors.white24),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Divider(color: Colors.white24, height: 1),
+          ),
           _filaResumen('Saldo Pendiente', '\$${pendiente < 0 ? 0 : pendiente}', esTotal: true),
         ],
       ),
@@ -262,8 +340,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(color: Colors.white70, fontSize: esTotal ? 18 : 14)),
-          Text(valor, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: esTotal ? 22 : 16)),
+          Text(label, style: TextStyle(color: Colors.white70, fontSize: esTotal ? 16 : 14)),
+          Text(valor, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: esTotal ? 24 : 16)),
         ],
       ),
     );
@@ -271,7 +349,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
 }
 
 // =========================
-// Componente Genérico de Buscador
+// Componente Genérico de Buscador (Actualizado con estilo moderno)
 // =========================
 class _ModalBuscador<T> extends StatefulWidget {
   final String titulo;
@@ -305,28 +383,43 @@ class _ModalBuscadorState<T> extends State<_ModalBuscador<T>> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: MediaQuery.of(context).size.height * 0.8,
-      padding: const EdgeInsets.all(20),
+      height: MediaQuery.of(context).size.height * 0.85,
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
       child: Column(
         children: [
-          Text(widget.titulo, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _searchCtrl,
-            autofocus: true,
-            decoration: InputDecoration(
-              hintText: widget.hint,
-              prefixIcon: const Icon(Icons.search),
-              filled: true,
-            ),
-            onChanged: (v) {
-              setState(() => filtrados = widget.items.where((item) => widget.filter(item, v)).toList());
-            },
+          Container(
+            width: 40, height: 4, 
+            margin: const EdgeInsets.only(bottom: 20),
+            decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
           ),
-          const SizedBox(height: 10),
+          Text(widget.titulo, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 20),
+          
+          // Buscador dentro del Modal
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: TextField(
+              controller: _searchCtrl,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: widget.hint,
+                prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 15),
+              ),
+              onChanged: (v) {
+                setState(() => filtrados = widget.items.where((item) => widget.filter(item, v)).toList());
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
           Expanded(
-            child: ListView.builder(
+            child: ListView.separated(
               itemCount: filtrados.length,
+              separatorBuilder: (_, __) => Divider(color: Colors.grey.shade100),
               itemBuilder: (context, i) => widget.itemBuilder(filtrados[i]),
             ),
           ),

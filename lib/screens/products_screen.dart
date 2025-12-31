@@ -50,7 +50,44 @@ class _ProductsScreenState extends State<ProductsScreen> {
     });
   }
 
-  // Lógica para eliminar desde el formulario o lista
+  // 🔥 DISEÑO DE BUSCADOR ACTUALIZADO (Consistente con Home y Clientes)
+  Widget _buildSearchBar() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: _searchCtrl,
+        onChanged: _filtrarProductos,
+        decoration: InputDecoration(
+          hintText: 'Buscar producto...',
+          hintStyle: TextStyle(color: Colors.grey.shade400),
+          prefixIcon: Icon(Icons.search_rounded, color: Colors.grey.shade400),
+          suffixIcon: _searchCtrl.text.isNotEmpty 
+            ? IconButton(
+                icon: const Icon(Icons.clear, color: Colors.grey), 
+                onPressed: () { 
+                  _searchCtrl.clear(); 
+                  _filtrarProductos(''); 
+                }
+              ) 
+            : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+        ),
+      ),
+    );
+  }
+
   Future<void> _eliminarProducto(int id) async {
     final confirmar = await showDialog<bool>(
       context: context,
@@ -70,7 +107,21 @@ class _ProductsScreenState extends State<ProductsScreen> {
     if (confirmar == true) {
       await _repo.eliminarProducto(id);
       _cargarProductos();
-      if (mounted) Navigator.pop(context); // Cierra el modal de edición
+      if (mounted) Navigator.pop(context); 
+    }
+  }
+
+  Future<void> _seleccionarImagen(Function(String) onSelected) async {
+    try {
+      final XFile? img = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 50,
+        maxWidth: 1000,
+        maxHeight: 1000,
+      );
+      if (img != null) onSelected(img.path);
+    } catch (e) {
+      debugPrint("Error al abrir galería: $e");
     }
   }
 
@@ -108,7 +159,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     producto == null ? 'Nuevo Producto' : 'Editar Producto',
                     style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
-                  // BOTÓN ELIMINAR (Solo si existe el producto)
                   if (producto != null)
                     IconButton(
                       icon: const Icon(Icons.delete_outline, color: Colors.red),
@@ -118,10 +168,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
               ),
               const SizedBox(height: 20),
               GestureDetector(
-                onTap: () async {
-                  final XFile? img = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
-                  if (img != null) modalSetState(() => imagenPath = img.path);
-                },
+                onTap: () => _seleccionarImagen((path) {
+                  modalSetState(() => imagenPath = path);
+                }),
                 child: Container(
                   height: 140,
                   width: double.infinity,
@@ -156,10 +205,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     );
                     producto != null ? await _repo.actualizarProducto(p) : await _repo.insertarProducto(p);
                     _cargarProductos();
-                    // ignore: use_build_context_synchronously
                     if (mounted) Navigator.pop(context);
                   },
-                  child: const Text('Guardar Cambios'),
+                  child: const Text('Guardar Producto'),
                 ),
               ),
             ],
@@ -175,6 +223,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
       appBar: AppBar(
         title: const Text('Mi Inventario'),
         scrolledUnderElevation: 0,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _mostrarFormularioProducto(),
@@ -182,28 +231,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            child: TextField(
-              controller: _searchCtrl,
-              onChanged: _filtrarProductos,
-              decoration: InputDecoration(
-                hintText: 'Buscar producto...',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchCtrl.text.isNotEmpty 
-                  ? IconButton(icon: const Icon(Icons.clear), onPressed: () { _searchCtrl.clear(); _filtrarProductos(''); }) 
-                  : null,
-                filled: true,
-                fillColor: Colors.white,
-              ),
-            ),
-          ),
+          _buildSearchBar(), // ✅ Buscador moderno aplicado
           
           Expanded(
             child: _productosFiltrados.isEmpty
-                ? const Center(child: Text('No hay productos que coincidan'))
+                ? const Center(child: Text('No hay productos registrados'))
                 : GridView.builder(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.only(left: 20, right: 20, top: 10, bottom: 80),
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
                       crossAxisSpacing: 16,
@@ -216,7 +250,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
                       final bool existeImg = p.imagenPath != null && File(p.imagenPath!).existsSync();
 
                       return Card(
+                        elevation: 0,
                         clipBehavior: Clip.antiAlias,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                          side: BorderSide(color: Colors.grey.shade100),
+                        ),
                         child: Stack(
                           children: [
                             InkWell(
@@ -229,10 +268,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
                                   Expanded(
                                     child: Container(
                                       width: double.infinity,
-                                      color: Colors.grey.shade100,
+                                      color: Colors.grey.shade50,
                                       child: existeImg
                                           ? Image.file(File(p.imagenPath!), fit: BoxFit.cover)
-                                          : const Center(child: Icon(Icons.image, size: 40, color: Colors.grey)),
+                                          : Icon(Icons.image_outlined, size: 40, color: Colors.grey.shade300),
                                     ),
                                   ),
                                   Padding(
@@ -250,14 +289,18 @@ class _ProductsScreenState extends State<ProductsScreen> {
                               ),
                             ),
                             Positioned(
-                              top: 5,
-                              right: 5,
-                              child: CircleAvatar(
-                                radius: 18,
-                                backgroundColor: Colors.white.withValues(alpha: 0.9),
-                                child: IconButton(
-                                  icon: const Icon(Icons.edit, size: 18, color: Colors.black87),
-                                  onPressed: () => _mostrarFormularioProducto(producto: p),
+                              top: 8,
+                              right: 8,
+                              child: GestureDetector(
+                                onTap: () => _mostrarFormularioProducto(producto: p),
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.9),
+                                    shape: BoxShape.circle,
+                                    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)]
+                                  ),
+                                  child: const Icon(Icons.edit_outlined, size: 18, color: Colors.black87),
                                 ),
                               ),
                             ),

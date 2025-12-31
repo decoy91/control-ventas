@@ -46,6 +46,29 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
   int get pendiente => _venta.total - totalAbonado;
   double get porcentajePago => (_venta.total > 0) ? (totalAbonado / _venta.total) : 0;
 
+  // Lógica para actualizar la venta en la DB después de cambios en abonos
+  Future<void> _actualizarEstadoVenta() async {
+    final nuevoTotalAbonado = totalAbonado;
+    final nuevaLiquidada = nuevoTotalAbonado >= _venta.total;
+    
+    _venta = _venta.copyWith(pagado: nuevoTotalAbonado, liquidada: nuevaLiquidada);
+    await _ventaRepo.actualizarVenta(_venta);
+    
+    if (nuevaLiquidada) _confettiController.play();
+    setState(() {});
+  }
+
+  Future<void> _eliminarAbono(Abono abono) async {
+    await _abonoRepo.eliminarAbono(abono.id!);
+    await cargarAbonos();
+    await _actualizarEstadoVenta();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Abono eliminado correctamente"))
+      );
+    }
+  }
+
   void _abrirModalAbono([Abono? abono]) {
     final ctrl = TextEditingController(text: abono?.monto.toString() ?? '');
     showModalBottomSheet(
@@ -84,11 +107,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                 }
                 
                 await cargarAbonos();
-                final nuevaLiquidada = totalAbonado >= _venta.total;
-                _venta = _venta.copyWith(pagado: totalAbonado, liquidada: nuevaLiquidada);
-                await _ventaRepo.actualizarVenta(_venta);
-                
-                if (nuevaLiquidada) _confettiController.play();
+                await _actualizarEstadoVenta();
                 // ignore: use_build_context_synchronously
                 Navigator.pop(context);
               },
@@ -105,7 +124,13 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
   Widget build(BuildContext context) {
     final f = DateFormat('dd MMM, yyyy');
     return Scaffold(
-      appBar: AppBar(title: const Text('Detalles de Venta')),
+      appBar: AppBar(
+        title: const Text('Detalles de Venta'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context, true), // Retornamos true para recargar lista en Home
+        ),
+      ),
       body: Stack(
         children: [
           ListView(
@@ -131,6 +156,8 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
 
   Widget _buildHeaderCard() {
     return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15), side: BorderSide(color: Colors.grey.shade100)),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -138,7 +165,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
           children: [
             Row(
               children: [
-                CircleAvatar(backgroundColor: Theme.of(context).primaryColor.withValues(alpha: 0.1), child: Icon(Icons.person, color: Theme.of(context).primaryColor)),
+                CircleAvatar(backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1), child: Icon(Icons.person, color: Theme.of(context).primaryColor)),
                 const SizedBox(width: 12),
                 Text(_venta.clienteNombre, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               ],
@@ -157,7 +184,10 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
 
   Widget _buildProgressCard() {
     return Card(
+      elevation: 4,
+      shadowColor: Theme.of(context).primaryColor.withOpacity(0.4),
       color: Theme.of(context).primaryColor,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -196,17 +226,94 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
   }
 
   Widget _buildAbonosList(DateFormat f) {
-    if (abonos.isEmpty) return const Center(child: Text('No hay abonos registrados todavía.'));
+    if (abonos.isEmpty) return const Center(child: Padding(
+      padding: EdgeInsets.all(20.0),
+      child: Text('No hay abonos registrados todavía.', style: TextStyle(color: Colors.grey)),
+    ));
+
     return Column(
-      children: abonos.map((a) => Card(
-        margin: const EdgeInsets.only(bottom: 12),
-        child: ListTile(
-          leading: const CircleAvatar(backgroundColor: Colors.green, child: Icon(Icons.arrow_downward, color: Colors.green, size: 20)),
-          title: Text('\$${a.monto}', style: const TextStyle(fontWeight: FontWeight.bold)),
-          subtitle: Text(f.format(a.fecha)),
-          trailing: !_venta.liquidada ? IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => _abrirModalAbono(a)) : null,
-        ),
-      )).toList(),
+      children: abonos.map((a) {
+        // 🔥 Determinamos si se puede editar/borrar
+        final bool puedeModificar = !_venta.liquidada;
+
+        return Dismissible(
+          key: Key(a.id.toString()),
+          // 🔥 Si está liquidada, la dirección es 'none' (bloquea el deslizamiento)
+          direction: puedeModificar ? DismissDirection.startToEnd : DismissDirection.none, 
+          confirmDismiss: (direction) async {
+            return await showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text("¿Eliminar abono?"),
+                content: const Text("El saldo pendiente se ajustará automáticamente."),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("CANCELAR")),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, true), 
+                    child: const Text("ELIMINAR", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))
+                  ),
+                ],
+              )
+            );
+          },
+          onDismissed: (_) => _eliminarAbono(a),
+          background: Container(
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.only(left: 20),
+            decoration: BoxDecoration(
+              color: Colors.redAccent, 
+              borderRadius: BorderRadius.circular(12)
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.delete_outline, color: Colors.white),
+                SizedBox(width: 8),
+                Text(
+                  "Eliminar Abono", 
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+                ),
+              ],
+            ),
+          ),
+          child: Card(
+            margin: const EdgeInsets.only(bottom: 12),
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.grey.shade100)
+            ),
+            child: ListTile(
+              leading: CircleAvatar(
+                // Cambia el color del icono si está liquidada para diferenciar
+                backgroundColor: puedeModificar ? Colors.green : Colors.blueGrey.shade100, 
+                child: Icon(
+                  puedeModificar ? Icons.arrow_downward : Icons.lock_outline, 
+                  color: Colors.white, 
+                  size: 20
+                )
+              ),
+              title: Text('\$${a.monto}', style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(f.format(a.fecha)),
+              trailing: puedeModificar 
+                  ? IconButton(
+                      icon: const Icon(Icons.edit_outlined, size: 20, color: Colors.blueGrey), 
+                      onPressed: () => _abrirModalAbono(a)
+                    ) 
+                  : Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8)
+                      ),
+                      child: const Text(
+                        "PAGADO", 
+                        style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)
+                      ),
+                    ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }

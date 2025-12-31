@@ -17,6 +17,20 @@ class DatabaseHelper {
     return _database!;
   }
 
+  Future<void> limpiarTodasLasTablas() async {
+  final db = await database;
+  
+  // Usamos un batch para ejecutar todas las eliminaciones en una sola transacción
+  Batch batch = db.batch();
+  
+  batch.delete('abonos');
+  batch.delete('ventas');
+  batch.delete('clientes');
+  batch.delete('productos');
+  
+  await batch.commit(noResult: true);
+}
+
   // =========================
   // Init DB
   // =========================

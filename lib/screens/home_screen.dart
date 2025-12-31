@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; 
 import 'package:url_launcher/url_launcher.dart';
 import '../models/venta.dart';
 import '../repositories/venta_repository.dart';
+import '../repositories/cliente_repository.dart';
 import '../screens/sales/new_sale_screen.dart';
 import '../screens/sales/sale_detail_screen.dart';
 import 'clients_screen.dart';
 import 'products_screen.dart';
+import 'activation_screen.dart'; 
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,6 +19,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _ventaRepo = VentaRepository();
+  final _clienteRepo = ClienteRepository();
   List<Venta> ventas = [];
   List<Venta> ventasFiltradas = [];
   bool cargando = true;
@@ -37,19 +41,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _aplicarFiltros() {
     List<Venta> temp = List.from(ventas);
-
     if (filtro == 'pendientes') {
       temp = temp.where((v) => !v.liquidada).toList();
     } else if (filtro == 'liquidadas') {
       temp = temp.where((v) => v.liquidada).toList();
     }
-
     if (busqueda.isNotEmpty) {
       temp = temp.where((v) =>
           v.clienteNombre.toLowerCase().contains(busqueda.toLowerCase()) ||
           v.productoNombre.toLowerCase().contains(busqueda.toLowerCase())).toList();
     }
-
     setState(() => ventasFiltradas = temp);
   }
 
@@ -59,57 +60,47 @@ class _HomeScreenState extends State<HomeScreen> {
       _aplicarFiltros();
     });
   }
-
-  // ==========================================
-  // Confirmación de salida de la App
-  // ==========================================
-  Future<bool> _onWillPop() async {
-    return await showDialog(
+  
+  Future<bool> _confirmarSalidaApp() async {
+    final resultado = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      builder: (dialogCtx) => AlertDialog(
         title: const Text("¿Salir de la aplicación?"),
-        content: const Text("Se cerrará la sesión actual de Mis Ventas."),
+        content: const Text("Se cerrará Mis Ventas."),
         actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogCtx, false), child: const Text("CANCELAR")),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text("CANCELAR"),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
-            ),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text("SALIR"),
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text("SALIR", style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
-    ) ?? false;
+    );
+    return resultado ?? false;
   }
 
   void _contactarCliente(Venta v) async {
     final saldoPendiente = v.total - v.pagado;
-    String mensaje;
-
-    if (v.liquidada) {
-      mensaje = "👋 Hola ${v.clienteNombre}, gracias por liquidar tu compra de ${v.productoNombre}. ¡Espero que lo disfrutes!😎";
-    } else {
-      mensaje = "👋 Hola ${v.clienteNombre}, te contacto para saludarte y recordarte el saldo pendiente de 💸 \$$saldoPendiente por tu compra de ${v.productoNombre}. ¿Cuándo podrías realizar tu próximo abono?";
-    }
-
-    final encodeMsg = Uri.encodeComponent(mensaje);
-    final uri = Uri.parse("whatsapp://send?text=$encodeMsg");
-
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    } else {
+    final cliente = await _clienteRepo.obtenerClientePorId(v.clienteId);
+    
+    if (cliente == null || cliente.telefono.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("No se pudo abrir WhatsApp")),
+          const SnackBar(content: Text("El cliente no tiene teléfono registrado"))
         );
       }
+      return;
+    }
+
+    String mensaje = v.liquidada
+        ? "👋 Hola ${v.clienteNombre}, gracias por liquidar tu compra de ${v.productoNombre}. ¡Espero que lo disfrutes!😎"
+        : "👋 Hola ${v.clienteNombre}, te contacto para recordarte el saldo pendiente de 💸 \$$saldoPendiente por tu compra de ${v.productoNombre}.";
+
+    final url = "https://wa.me/${cliente.telefono}?text=${Uri.encodeComponent(mensaje)}";
+    final uri = Uri.parse(url);
+
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 
@@ -121,33 +112,54 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<bool?> _confirmarEliminacion(Venta v) {
     return showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         title: const Text("Eliminar Venta"),
-        content: Text("¿Deseas borrar definitivamente la venta de ${v.clienteNombre}?"),
+        content: Text("¿Deseas borrar la venta de ${v.clienteNombre}?"),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("CANCELAR")),
+          TextButton(onPressed: () => Navigator.pop(dialogCtx, false), child: const Text("CANCELAR")),
           TextButton(
-            onPressed: () => Navigator.pop(context, true), 
-            child: const Text("ELIMINAR", style: TextStyle(color: Colors.red))
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text("ELIMINAR", style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
   }
 
+  Future<void> _confirmarCerrarSesion() async {
+    final bool? salir = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text("Cerrar Sesión"),
+        content: const Text("¿Estás seguro de que deseas salir?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogCtx, false), child: const Text("CANCELAR")),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text("CERRAR SESIÓN", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (salir == true && mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const ActivationScreen()),
+        (route) => false,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final colorPrimary = Theme.of(context).primaryColor;
-
-    // ✅ Uso de PopScope para interceptar el botón atrás
     return PopScope(
-      canPop: false, // Bloqueamos la salida automática
+      canPop: false, 
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        final shouldPop = await _onWillPop();
-        if (shouldPop && context.mounted) {
-          // Si el usuario confirma, cerramos la app manualmente
-          Navigator.of(context).pop(); 
+        final quiereSalir = await _confirmarSalidaApp();
+        if (quiereSalir) {
+          await SystemChannels.platform.invokeMethod('SystemNavigator.pop');
         }
       },
       child: Scaffold(
@@ -160,14 +172,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 20),
                 _buildHeader(),
                 const SizedBox(height: 24),
-                _buildStats(colorPrimary),
+                _buildStats(),
                 const SizedBox(height: 24),
                 _buildSearchBar(),
                 const SizedBox(height: 20),
                 Expanded(
-                  child: cargando 
-                    ? const Center(child: CircularProgressIndicator()) 
-                    : _buildSalesList(),
+                  child: cargando
+                      ? const Center(child: CircularProgressIndicator())
+                      : _buildSalesList(),
                 ),
               ],
             ),
@@ -175,10 +187,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: () async {
-            final recargar = await Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const NewSaleScreen()),
-            );
+            final recargar = await Navigator.push(context, MaterialPageRoute(builder: (_) => const NewSaleScreen()));
             if (recargar == true) cargarVentas();
           },
           icon: const Icon(Icons.add),
@@ -188,7 +197,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- El resto de tus métodos widgets se mantienen igual ---
   Widget _buildHeader() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -202,106 +210,94 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         Row(
           children: [
-            _CircleIconButton(
-              icon: Icons.people_outline, 
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ClientsScreen()))
-            ),
-            const SizedBox(width: 10),
-            _CircleIconButton(
-              icon: Icons.inventory_2_outlined, 
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProductsScreen()))
-            ),
+            _CircleIconButton(icon: Icons.people_outline, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ClientsScreen()))),
+            const SizedBox(width: 8),
+            _CircleIconButton(icon: Icons.inventory_2_outlined, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProductsScreen()))),
+            const SizedBox(width: 8),
+            _CircleIconButton(icon: Icons.logout_rounded, onTap: _confirmarCerrarSesion),
           ],
         )
       ],
     );
   }
 
-  Widget _buildStats(Color primary) {
+  Widget _buildStats() {
     int pendientes = ventas.where((v) => !v.liquidada).length;
     int liquidadas = ventas.where((v) => v.liquidada).length;
-
     return Row(
       children: [
-        Expanded(child: _StatCard(
-          label: 'Pendientes', 
-          count: pendientes, 
-          color: Colors.orange, 
-          isActive: filtro == 'pendientes',
-          onTap: () => filtrarVentas('pendientes')
-        )),
+        Expanded(
+          child: _StatCard(
+            label: 'Pendientes', 
+            count: pendientes, 
+            color: Colors.orange, 
+            isActive: filtro == 'pendientes', 
+            onTap: () => filtrarVentas('pendientes')
+          )
+        ),
         const SizedBox(width: 15),
-        Expanded(child: _StatCard(
-          label: 'Pagadas', 
-          count: liquidadas, 
-          color: Colors.green, 
-          isActive: filtro == 'liquidadas',
-          onTap: () => filtrarVentas('liquidadas')
-        )),
+        Expanded(
+          child: _StatCard(
+            label: 'Pagadas', 
+            count: liquidadas, 
+            color: Colors.green, 
+            isActive: filtro == 'liquidadas', 
+            onTap: () => filtrarVentas('liquidadas')
+          )
+        ),
       ],
     );
   }
 
   Widget _buildSearchBar() {
-    return TextField(
-      onChanged: (v) {
-        busqueda = v;
-        _aplicarFiltros();
-      },
-      decoration: const InputDecoration(
-        hintText: 'Buscar por cliente o producto...',
-        prefixIcon: Icon(Icons.search_rounded),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: TextField(
+        onChanged: (v) { 
+          busqueda = v; 
+          _aplicarFiltros(); 
+        },
+        decoration: InputDecoration(
+          hintText: 'Buscar cliente o producto...',
+          hintStyle: TextStyle(color: Colors.grey.shade400),
+          prefixIcon: Icon(Icons.search_rounded, color: Colors.grey.shade400),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+        ),
       ),
     );
   }
 
   Widget _buildSalesList() {
-    if (ventasFiltradas.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey.shade300),
-            const SizedBox(height: 16),
-            const Text("No hay ventas registradas", style: TextStyle(color: Colors.grey)),
-          ],
-        ),
-      );
-    }
-
+    if (ventasFiltradas.isEmpty) return const Center(child: Text("Sin ventas registradas", style: TextStyle(color: Colors.grey)));
     return ListView.builder(
       itemCount: ventasFiltradas.length,
       padding: const EdgeInsets.only(bottom: 100),
       itemBuilder: (_, i) {
         final v = ventasFiltradas[i];
-        
         return Dismissible(
           key: Key(v.id.toString()),
           background: Container(
-            alignment: Alignment.centerLeft,
+            color: Colors.redAccent, 
+            alignment: Alignment.centerLeft, 
             padding: const EdgeInsets.only(left: 20),
-            margin: const EdgeInsets.symmetric(vertical: 4),
-            decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(12)),
-            child: const Row(
-              children: [
-                Icon(Icons.delete_forever, color: Colors.white),
-                Text("Eliminar", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              ],
-            ),
+            child: const Icon(Icons.delete, color: Colors.white),
           ),
           secondaryBackground: Container(
-            alignment: Alignment.centerRight,
+            color: Colors.green, 
+            alignment: Alignment.centerRight, 
             padding: const EdgeInsets.only(right: 20),
-            margin: const EdgeInsets.symmetric(vertical: 4),
-            decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(12)),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Text("Cobrar", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                SizedBox(width: 8),
-                Icon(Icons.wechat_rounded, color: Colors.white),
-              ],
-            ),
+            child: const Icon(Icons.wechat, color: Colors.white),
           ),
           confirmDismiss: (direction) async {
             if (direction == DismissDirection.startToEnd) {
@@ -311,17 +307,13 @@ class _HomeScreenState extends State<HomeScreen> {
               return false;
             }
           },
-          onDismissed: (direction) {
-            if (direction == DismissDirection.startToEnd) {
-              _eliminarVenta(v.id!);
-            }
-          },
+          onDismissed: (direction) => _eliminarVenta(v.id!),
           child: _SaleCard(
-            venta: v, 
+            venta: v,
             onTap: () async {
               await Navigator.push(context, MaterialPageRoute(builder: (_) => SaleDetailScreen(venta: v)));
               cargarVentas();
-            }
+            },
           ),
         );
       },
@@ -329,7 +321,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// --- Se mantienen los Widgets de Apoyo _StatCard, _SaleCard y _CircleIconButton ---
+// ==========================================
+// WIDGETS DE APOYO ACTUALIZADOS
+// ==========================================
+
 class _StatCard extends StatelessWidget {
   final String label;
   final int count;
@@ -337,27 +332,50 @@ class _StatCard extends StatelessWidget {
   final bool isActive;
   final VoidCallback onTap;
 
-  const _StatCard({required this.label, required this.count, required this.color, required this.isActive, required this.onTap});
+  const _StatCard({
+    required this.label, 
+    required this.count, 
+    required this.color, 
+    required this.isActive, 
+    required this.onTap
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+      child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isActive ? color : Colors.white,
+          // 🔥 Fondo tenue cuando no está activo, sólido cuando sí
+          color: isActive ? color : color.withOpacity(0.12),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isActive ? color : Colors.grey.shade200),
-          boxShadow: isActive ? [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 4))] : [],
+          border: Border.all(
+            color: isActive ? color : color.withOpacity(0.2),
+            width: 1,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: TextStyle(color: isActive ? Colors.white : Colors.grey, fontWeight: FontWeight.w500)),
+            Text(
+              label, 
+              style: TextStyle(
+                // 🔥 Texto del color original siempre para legibilidad
+                color: isActive ? Colors.white : color, 
+                fontWeight: FontWeight.bold, 
+                fontSize: 13
+              )
+            ),
             const SizedBox(height: 4),
-            Text(count.toString(), style: TextStyle(color: isActive ? Colors.white : Colors.black, fontSize: 24, fontWeight: FontWeight.bold)),
+            Text(
+              count.toString(), 
+              style: TextStyle(
+                color: isActive ? Colors.white : color, 
+                fontSize: 24, 
+                fontWeight: FontWeight.bold
+              )
+            ),
           ],
         ),
       ),
@@ -368,39 +386,95 @@ class _StatCard extends StatelessWidget {
 class _SaleCard extends StatelessWidget {
   final Venta venta;
   final VoidCallback onTap;
-
   const _SaleCard({required this.venta, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(12),
+    final int restante = venta.total - venta.pagado;
+    final double progreso = venta.total > 0 ? (venta.pagado / venta.total) : 0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade100),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))
+        ]
+      ),
+      child: InkWell(
         onTap: onTap,
-        leading: Container(
-          width: 50, height: 50,
-          decoration: BoxDecoration(
-            color: (venta.liquidada ? Colors.green : Colors.orange).withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  CircleAvatar(
+                    backgroundColor: (venta.liquidada ? Colors.green : Colors.orange).withOpacity(0.1),
+                    child: Icon(
+                      venta.liquidada ? Icons.check_circle_rounded : Icons.schedule_rounded, 
+                      color: venta.liquidada ? Colors.green : Colors.orange,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(venta.clienteNombre, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        Text(venta.productoNombre, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text('\$${venta.total}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text(venta.liquidada ? "Liquidada" : "Pendiente", 
+                           style: TextStyle(color: venta.liquidada ? Colors.green : Colors.orange, fontSize: 11, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: LinearProgressIndicator(
+                  value: progreso,
+                  backgroundColor: Colors.grey.shade100,
+                  color: venta.liquidada ? Colors.green : Colors.blue,
+                  minHeight: 6,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _miniInfo("Abonado", "\$${venta.pagado}", Colors.blueGrey),
+                  if (!venta.liquidada)
+                    _miniInfo("Restante", "\$$restante", Colors.redAccent)
+                  else
+                    const Icon(Icons.verified_rounded, color: Colors.green, size: 16),
+                ],
+              )
+            ],
           ),
-          child: Icon(
-            venta.liquidada ? Icons.check_rounded : Icons.timer_outlined,
-            color: venta.liquidada ? Colors.green : Colors.orange,
-          ),
-        ),
-        title: Text(venta.clienteNombre, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        subtitle: Text(venta.productoNombre),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text('\$${venta.total}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            Text(venta.liquidada ? 'Liquidada' : 'Pendiente', 
-              style: TextStyle(color: venta.liquidada ? Colors.green : Colors.orange, fontSize: 12, fontWeight: FontWeight.w600)),
-          ],
         ),
       ),
+    );
+  }
+
+  Widget _miniInfo(String label, String monto, Color color) {
+    return Row(
+      children: [
+        Text("$label: ", style: const TextStyle(color: Colors.grey, fontSize: 12)),
+        Text(monto, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13)),
+      ],
     );
   }
 }
@@ -414,11 +488,17 @@ class _CircleIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
+        color: Colors.white, 
+        shape: BoxShape.circle, 
         border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 5)]
       ),
-      child: IconButton(icon: Icon(icon, color: Colors.black87), onPressed: onTap),
+      child: IconButton(
+        icon: Icon(icon, color: Colors.black87, size: 20), 
+        onPressed: onTap,
+        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+        padding: EdgeInsets.zero,
+      ),
     );
   }
 }

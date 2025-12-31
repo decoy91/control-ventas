@@ -1,4 +1,4 @@
-//lib/models/venta.dart
+// lib/models/venta.dart
 class Venta {
   final int? id;
   final int clienteId;
@@ -10,7 +10,6 @@ class Venta {
   final bool liquidada;
   final DateTime fecha;
   final String? nota;
-  
 
   Venta({
     this.id,
@@ -25,9 +24,6 @@ class Venta {
     this.nota,
   });
 
-  // =========================
-  // copyWith 🔥
-  // =========================
   Venta copyWith({
     int? id,
     int? clienteId,
@@ -54,9 +50,7 @@ class Venta {
     );
   }
 
-  // =========================
   // SQLite
-  // =========================
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -84,6 +78,37 @@ class Venta {
       liquidada: map['liquidada'] == 1,
       fecha: DateTime.fromMillisecondsSinceEpoch(map['fecha']),
       nota: map['nota'],
+    );
+  }
+
+  // Firebase Firestore
+  Map<String, dynamic> toJson() {
+    return {
+      'id_local': id,
+      'clienteId': clienteId,
+      'clienteNombre': clienteNombre,
+      'productoId': productoId,
+      'productoNombre': productoNombre,
+      'total': total,
+      'pagado': pagado,
+      'liquidada': liquidada,
+      'fecha': fecha.toIso8601String(),
+      'nota': nota,
+    };
+  }
+
+  factory Venta.fromJson(Map<String, dynamic> json) {
+    return Venta(
+      id: json['id_local'],
+      clienteId: json['clienteId'] ?? 0,
+      clienteNombre: json['clienteNombre'] ?? '',
+      productoId: json['productoId'] ?? 0,
+      productoNombre: json['productoNombre'] ?? '',
+      total: json['total'] ?? 0,
+      pagado: json['pagado'] ?? 0,
+      liquidada: json['liquidada'] ?? false,
+      fecha: json['fecha'] != null ? DateTime.parse(json['fecha']) : DateTime.now(),
+      nota: json['nota'],
     );
   }
 }

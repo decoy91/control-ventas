@@ -96,24 +96,24 @@ class ProductDetailScreen extends StatelessWidget {
                   const SizedBox(height: 24),
 
                   // Título Descripción
-                  const Text(
-                    'Descripción',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
+                  // const Text(
+                  //   'Descripción',
+                  //   style: TextStyle(
+                  //     fontSize: 18,
+                  //     fontWeight: FontWeight.bold,
+                  //   ),
+                  // ),
+                  // const SizedBox(height: 12),
 
                   // Texto Descripción
-                  Text(
-                    descripcion.isEmpty ? 'Sin descripción disponible.' : descripcion,
-                    style: TextStyle(
-                      fontSize: 16,
-                      height: 1.6,
-                      color: Colors.grey.shade700,
-                    ),
-                  ),
+                  // Text(
+                  //   descripcion.isEmpty ? 'Sin descripción disponible.' : descripcion,
+                  //   style: TextStyle(
+                  //     fontSize: 16,
+                  //     height: 1.6,
+                  //     color: Colors.grey.shade700,
+                  //   ),
+                  // ),
                   
                   const SizedBox(height: 100), // Espacio para no chocar con el botón inferior
                 ],

@@ -84,7 +84,6 @@ class _ClientsScreenState extends State<ClientsScreen> {
     }
   }
 
-  // Lógica para eliminar cliente
   Future<void> _eliminarCliente(int id) async {
     final confirmar = await showDialog<bool>(
       context: context,
@@ -101,7 +100,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
     if (confirmar == true) {
       await _repo.eliminarCliente(id);
       _cargarClientes();
-      if (mounted) Navigator.pop(context); // Cierra el modal de edición
+      if (mounted) Navigator.pop(context); 
     }
   }
 
@@ -153,7 +152,6 @@ class _ClientsScreenState extends State<ClientsScreen> {
                     await _repo.insertarCliente(Cliente(nombre: _nombreCtrl.text.trim(), telefono: _telefonoCtrl.text.trim()));
                   }
                   _cargarClientes();
-                  // ignore: use_build_context_synchronously
                   if (mounted) Navigator.pop(context);
                 },
                 child: const Text('Guardar'),
@@ -172,6 +170,44 @@ class _ClientsScreenState extends State<ClientsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  // 🔥 DISEÑO DE BUSCADOR ACTUALIZADO
+  Widget _buildSearchBar() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: _searchCtrl,
+        onChanged: _filtrarClientes,
+        decoration: InputDecoration(
+          hintText: 'Buscar por nombre o número...',
+          hintStyle: TextStyle(color: Colors.grey.shade400),
+          prefixIcon: Icon(Icons.search_rounded, color: Colors.grey.shade400),
+          suffixIcon: _searchCtrl.text.isNotEmpty 
+            ? IconButton(
+                icon: const Icon(Icons.clear, color: Colors.grey), 
+                onPressed: () { 
+                  _searchCtrl.clear(); 
+                  _filtrarClientes(''); 
+                }
+              ) 
+            : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -188,36 +224,26 @@ class _ClientsScreenState extends State<ClientsScreen> {
 
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: TextField(
-              controller: _searchCtrl,
-              onChanged: _filtrarClientes,
-              decoration: InputDecoration(
-                hintText: 'Buscar por nombre o número...',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchCtrl.text.isNotEmpty 
-                  ? IconButton(icon: const Icon(Icons.clear), onPressed: () { _searchCtrl.clear(); _filtrarClientes(''); }) 
-                  : null,
-                filled: true,
-                fillColor: Colors.white,
-              ),
-            ),
-          ),
+          _buildSearchBar(), // ✅ Aplicado el diseño moderno
           
           Expanded(
             child: _clientesFiltrados.isEmpty
                 ? const Center(child: Text('No se encontraron clientes'))
                 : ListView.builder(
-                    // ✅ EL CAMBIO IMPORTANTE: Padding inferior de 80 para que el FAB no tape nada
-                    padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 80),
+                    padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 80),
                     itemCount: _clientesFiltrados.length,
                     itemBuilder: (_, i) {
                       final c = _clientesFiltrados[i];
                       return Card(
+                        elevation: 0, // Ajustado para un look más limpio
+                        margin: const EdgeInsets.only(bottom: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(color: Colors.grey.shade100)
+                        ),
                         child: ListTile(
                           leading: CircleAvatar(
-                            backgroundColor: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                            backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
                             child: Text(c.nombre.isNotEmpty ? c.nombre[0].toUpperCase() : '?'),
                           ),
                           title: Text(c.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),

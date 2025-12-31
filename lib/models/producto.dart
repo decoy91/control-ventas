@@ -14,6 +14,28 @@ class Producto {
     this.descripcion,
   });
 
+  // =========================
+  // copyWith 🔥
+  // =========================
+  Producto copyWith({
+    int? id,
+    String? nombre,
+    int? precio,
+    String? imagenPath,
+    String? descripcion,
+  }) {
+    return Producto(
+      id: id ?? this.id,
+      nombre: nombre ?? this.nombre,
+      precio: precio ?? this.precio,
+      imagenPath: imagenPath ?? this.imagenPath,
+      descripcion: descripcion ?? this.descripcion,
+    );
+  }
+
+  // =========================
+  // SQLite
+  // =========================
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -31,6 +53,32 @@ class Producto {
       precio: map['precio'],
       imagenPath: map['imagenPath'],
       descripcion: map['descripcion'],
+    );
+  }
+
+  // =========================
+  // Firebase Firestore 🔥
+  // =========================
+
+  // Convertir a Map para la nube
+  Map<String, dynamic> toJson() {
+    return {
+      'id_local': id,
+      'nombre': nombre,
+      'precio': precio,
+      'imagenPath': imagenPath,
+      'descripcion': descripcion,
+    };
+  }
+
+  // Crear objeto desde datos de la nube
+  factory Producto.fromJson(Map<String, dynamic> json) {
+    return Producto(
+      id: json['id_local'],
+      nombre: json['nombre'] ?? '',
+      precio: json['precio'] ?? 0,
+      imagenPath: json['imagenPath'],
+      descripcion: json['descripcion'],
     );
   }
 }
