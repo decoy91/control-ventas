@@ -189,7 +189,7 @@ class _ActivationScreenState extends State<ActivationScreen> with SingleTickerPr
                       border: Border.all(color: Colors.grey.shade200),
                       boxShadow: [
                         BoxShadow(
-                          color: _cargando ? primaryColor.withOpacity(0.2) : Colors.black.withOpacity(0.02), 
+                          color: _cargando ? primaryColor.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.02), 
                           blurRadius: 20, 
                           spreadRadius: 5
                         )
@@ -222,7 +222,7 @@ class _ActivationScreenState extends State<ActivationScreen> with SingleTickerPr
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(color: Colors.grey.shade100),
                     boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 8))
+                      BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 20, offset: const Offset(0, 8))
                     ],
                   ),
                   child: Column(

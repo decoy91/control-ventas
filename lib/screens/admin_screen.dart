@@ -42,11 +42,11 @@ class _AdminScreenState extends State<AdminScreen> {
 
   // 🔥 Función para compartir el código
   void _compartirCodigo(String codigo, int dias) {
-    String mensaje = "¡Hola! Aquí tienes tu código de activación para Mis Ventas:\n\n"
+    String mensaje = "¡Hola! Aquí tienes tu código de activación:\n\n"
         "🔑 Código: $codigo\n"
         "⏳ Duración: $dias días\n\n"
-        "Descarga la app y actívala ahora.";
-    Share.share(mensaje);
+        "Espero disfrutes la App.";
+    SharePlus.instance.share(ShareParams(text: mensaje));
   }
 
   @override

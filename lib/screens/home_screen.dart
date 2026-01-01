@@ -172,31 +172,36 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _confirmarCerrarSesion() async {
-    final bool? salir = await showDialog<bool>(
-      context: context,
-      builder: (dialogCtx) => AlertDialog(
-        title: const Text("Cerrar Sesión"),
-        content: const Text("¿Estás seguro de que deseas salir?"),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogCtx, false), child: const Text("CANCELAR")),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx, true),
-            child: const Text("CERRAR SESIÓN", style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
+  final bool? salir = await showDialog<bool>(
+    context: context,
+    builder: (dialogCtx) => AlertDialog(
+      title: const Text("Cerrar Sesión"),
+      content: const Text("¿Estás seguro de que deseas salir?"),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(dialogCtx, false), child: const Text("CANCELAR")),
+        TextButton(
+          onPressed: () => Navigator.pop(dialogCtx, true),
+          child: const Text("CERRAR SESIÓN", style: TextStyle(color: Colors.red)),
+        ),
+      ],
+    ),
+  );
 
-    if (salir == true && mounted) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('activado', false); // Marcamos como no activado
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (context) => const ActivationScreen()),
-        (route) => false,
-      );
-    }
+  // 🔥 Verificamos si 'salir' es true Y si el widget sigue montado
+  if (salir == true && mounted) {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('activado', false);
+
+    // 🔥 Volvemos a verificar 'mounted' después del segundo await
+    if (!mounted) return;
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const ActivationScreen()),
+      (route) => false,
+    );
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -314,7 +319,7 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.circular(15),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 5),
           ),
@@ -405,10 +410,10 @@ class _StatCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isActive ? color : color.withOpacity(0.12),
+          color: isActive ? color : color.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isActive ? color : color.withOpacity(0.2),
+            color: isActive ? color : color.withValues(alpha: 0.2),
             width: 1,
           ),
         ),
@@ -456,7 +461,7 @@ class _SaleCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey.shade100),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))
+          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))
         ]
       ),
       child: InkWell(
@@ -470,7 +475,7 @@ class _SaleCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   CircleAvatar(
-                    backgroundColor: (venta.liquidada ? Colors.green : Colors.orange).withOpacity(0.1),
+                    backgroundColor: (venta.liquidada ? Colors.green : Colors.orange).withValues(alpha: 0.1),
                     child: Icon(
                       venta.liquidada ? Icons.check_circle_rounded : Icons.schedule_rounded, 
                       color: venta.liquidada ? Colors.green : Colors.orange,
@@ -547,7 +552,7 @@ class _CircleIconButton extends StatelessWidget {
         color: Colors.white, 
         shape: BoxShape.circle, 
         border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 5)]
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 5)]
       ),
       child: IconButton(
         icon: Icon(icon, color: Colors.black87, size: 20), 

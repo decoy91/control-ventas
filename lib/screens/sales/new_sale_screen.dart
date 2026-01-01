@@ -232,7 +232,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -271,12 +271,12 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: seleccionado != null ? Theme.of(context).primaryColor.withOpacity(0.03) : Colors.white,
+              color: seleccionado != null ? Theme.of(context).primaryColor.withValues(alpha: 0.03) : Colors.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: seleccionado != null ? Theme.of(context).primaryColor : Colors.transparent),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -314,7 +314,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Theme.of(context).primaryColor.withOpacity(0.3),
+            color: Theme.of(context).primaryColor.withValues(alpha: 0.3),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),
@@ -419,7 +419,7 @@ class _ModalBuscadorState<T> extends State<_ModalBuscador<T>> {
           Expanded(
             child: ListView.separated(
               itemCount: filtrados.length,
-              separatorBuilder: (_, __) => Divider(color: Colors.grey.shade100),
+              separatorBuilder: (_, _) => Divider(color: Colors.grey.shade100),
               itemBuilder: (context, i) => widget.itemBuilder(filtrados[i]),
             ),
           ),

@@ -59,7 +59,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
         borderRadius: BorderRadius.circular(15),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 5),
           ),
@@ -205,6 +205,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     );
                     producto != null ? await _repo.actualizarProducto(p) : await _repo.insertarProducto(p);
                     _cargarProductos();
+                    // ignore: use_build_context_synchronously
                     if (mounted) Navigator.pop(context);
                   },
                   child: const Text('Guardar Producto'),
@@ -296,7 +297,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                                 child: Container(
                                   padding: const EdgeInsets.all(6),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.9),
+                                    color: Colors.white.withValues(alpha: 0.9),
                                     shape: BoxShape.circle,
                                     boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)]
                                   ),

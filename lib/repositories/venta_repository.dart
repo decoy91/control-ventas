@@ -109,10 +109,10 @@ class VentaRepository {
         await ventaRef.delete();
       }
       
-      print("Venta $id y sus abonos eliminados correctamente de local y nube.");
+      // print("Venta $id y sus abonos eliminados correctamente de local y nube.");
       
     } catch (e) {
-      print("Error al eliminar venta completa: $e");
+      // print("Error al eliminar venta completa: $e");
     }
   }
 
@@ -131,7 +131,7 @@ class VentaRepository {
             .set(venta.toJson()); 
       }
     } catch (e) {
-      print("Error sincronizando venta: $e");
+      // print("Error sincronizando venta: $e");
     }
   }
 
@@ -171,9 +171,9 @@ class VentaRepository {
       }
 
       await batch.commit(noResult: true);
-      print("Ventas recuperadas y base de datos local sincronizada.");
+      // print("Ventas recuperadas y base de datos local sincronizada.");
     } catch (e) {
-      print("Error al recuperar datos: $e");
+      // print("Error al recuperar datos: $e");
     }
   }
 

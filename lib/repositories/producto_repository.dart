@@ -94,7 +94,7 @@ class ProductoRepository {
             .set(producto.toJson());
       }
     } catch (e) {
-      print("Error sincronizando producto: $e");
+      // print("Error sincronizando producto: $e");
     }
   }
 
@@ -124,7 +124,7 @@ class ProductoRepository {
       }
       await batch.commit(noResult: true);
     } catch (e) {
-      print("Error al recuperar productos: $e");
+      // print("Error al recuperar productos: $e");
     }
   }
 }

@@ -152,6 +152,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
                     await _repo.insertarCliente(Cliente(nombre: _nombreCtrl.text.trim(), telefono: _telefonoCtrl.text.trim()));
                   }
                   _cargarClientes();
+                  // ignore: use_build_context_synchronously
                   if (mounted) Navigator.pop(context);
                 },
                 child: const Text('Guardar'),
@@ -179,7 +180,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
         borderRadius: BorderRadius.circular(15),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 5),
           ),
@@ -243,7 +244,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
                         ),
                         child: ListTile(
                           leading: CircleAvatar(
-                            backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                            backgroundColor: Theme.of(context).primaryColor.withValues(alpha: 0.1),
                             child: Text(c.nombre.isNotEmpty ? c.nombre[0].toUpperCase() : '?'),
                           ),
                           title: Text(c.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),

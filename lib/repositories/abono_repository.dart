@@ -104,8 +104,9 @@ class AbonoRepository {
             .doc(abono.id.toString())
             .set(abono.toMap()); // Usamos toMap para Firestore también
       }
-    } catch (e) {
-      print("Error sincronizando abono: $e");
+    } 
+    catch (e) {
+      // print("Error sincronizando abono: $e");
     }
   }
 
@@ -137,9 +138,9 @@ class AbonoRepository {
       }
 
       await batch.commit(noResult: true);
-      print("Abonos recuperados con éxito.");
+      // print("Abonos recuperados con éxito.");
     } catch (e) {
-      print("Error al recuperar abonos: $e");
+      // print("Error al recuperar abonos: $e");
     }
   }
 

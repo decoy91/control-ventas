@@ -111,7 +111,7 @@ class ClienteRepository {
             .set(cliente.toJson());
       }
     } catch (e) {
-      print("Error sincronizando cliente: $e");
+      // print("Error sincronizando cliente: $e");
     }
   }
 
@@ -141,7 +141,7 @@ class ClienteRepository {
       }
       await batch.commit(noResult: true);
     } catch (e) {
-      print("Error al recuperar clientes: $e");
+      // print("Error al recuperar clientes: $e");
     }
   }
 }

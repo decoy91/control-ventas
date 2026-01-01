@@ -165,7 +165,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
           children: [
             Row(
               children: [
-                CircleAvatar(backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1), child: Icon(Icons.person, color: Theme.of(context).primaryColor)),
+                CircleAvatar(backgroundColor: Theme.of(context).primaryColor.withValues(alpha: 0.1), child: Icon(Icons.person, color: Theme.of(context).primaryColor)),
                 const SizedBox(width: 12),
                 Text(_venta.clienteNombre, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               ],
@@ -185,7 +185,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
   Widget _buildProgressCard() {
     return Card(
       elevation: 4,
-      shadowColor: Theme.of(context).primaryColor.withOpacity(0.4),
+      shadowColor: Theme.of(context).primaryColor.withValues(alpha: 0.4),
       color: Theme.of(context).primaryColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
@@ -226,10 +226,12 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
   }
 
   Widget _buildAbonosList(DateFormat f) {
-    if (abonos.isEmpty) return const Center(child: Padding(
+    if (abonos.isEmpty) {
+      return const Center(child: Padding(
       padding: EdgeInsets.all(20.0),
       child: Text('No hay abonos registrados todavía.', style: TextStyle(color: Colors.grey)),
     ));
+    }
 
     return Column(
       children: abonos.map((a) {
@@ -302,7 +304,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                   : Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.1),
+                        color: Colors.green.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8)
                       ),
                       child: const Text(
