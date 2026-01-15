@@ -1,8 +1,9 @@
+import 'dart:io'; // Para verificar conexión
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; 
 import 'package:url_launcher/url_launcher.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // 🔥 Importado
-import 'package:cloud_firestore/cloud_firestore.dart'; // 🔥 Importado
+import 'package:shared_preferences/shared_preferences.dart'; 
+import 'package:cloud_firestore/cloud_firestore.dart'; 
 import '../models/venta.dart';
 import '../repositories/venta_repository.dart';
 import '../repositories/cliente_repository.dart';
@@ -35,20 +36,35 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     cargarVentas();
-    _obtenerDiasRestantes(); // 🔥 Llamada al iniciar
+    _obtenerDiasRestantes(); 
   }
 
-  // 🔥 Lógica para calcular días restantes desde Firebase
+  // 🔥 Lógica con verificación de Internet y bloqueo estricto
   Future<void> _obtenerDiasRestantes() async {
     try {
+      // 1. Verificar si hay conexión a Internet
+      bool hasConnection = false;
+      try {
+        final result = await InternetAddress.lookup('google.com');
+        hasConnection = result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+      } catch (_) {
+        hasConnection = false;
+      }
+
       final prefs = await SharedPreferences.getInstance();
       final codigo = prefs.getString('codigo_licencia');
 
-      if (codigo != null) {
+      if (codigo == null) {
+        if (mounted) setState(() => diasRestantesMsg = "Sin licencia activa");
+        return;
+      }
+
+      // 2. Si hay internet, consultamos la "Verdad" en Firebase
+      if (hasConnection) {
         final doc = await FirebaseFirestore.instance
             .collection('licencias')
             .doc(codigo)
-            .get();
+            .get(const GetOptions(source: Source.server)); // Forzamos consulta al servidor
 
         if (doc.exists) {
           final Timestamp? fechaExp = doc.data()?['fecha_expiracion'];
@@ -57,24 +73,70 @@ class _HomeScreenState extends State<HomeScreen> {
             final diferencia = fechaExp.toDate().difference(ahora).inDays;
             
             if (mounted) {
-              setState(() {
-                if (diferencia <= 0) {
-                  diasRestantesMsg = "Licencia expirada ⚠️";
-                } else if (diferencia <= 5) {
-                  diasRestantesMsg = "Vence en $diferencia días ⏳";
-                } else {
-                  diasRestantesMsg = "Días de licencia: $diferencia";
-                }
-              });
+              if (diferencia <= 0) {
+                setState(() => diasRestantesMsg = "Licencia expirada ⚠️");
+                _bloquearPorExpiracion(); 
+              } else {
+                setState(() {
+                  if (diferencia <= 5) {
+                    diasRestantesMsg = "Vence en $diferencia días ⏳";
+                  } else {
+                    diasRestantesMsg = "Días de licencia: $diferencia";
+                  }
+                });
+              }
             }
             return;
           }
         }
+      } else {
+        // 3. Si NO hay internet, confiamos en el estado local previo (UX Offline)
+        if (mounted) {
+          setState(() => diasRestantesMsg = "Modo Offline (Licencia Activa)");
+        }
       }
-      if (mounted) setState(() => diasRestantesMsg = "Sin licencia activa");
     } catch (e) {
-      if (mounted) setState(() => diasRestantesMsg = "Licencia activa");
+      if (mounted) setState(() => diasRestantesMsg = "Error de sincronización");
     }
+  }
+
+  // 🔥 Bloqueo de UI y redirección
+  Future<void> _bloquearPorExpiracion() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('activado', false); 
+    
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            SizedBox(width: 10),
+            Text("Licencia Expirada"),
+          ],
+        ),
+        content: const Text("Tu periodo de uso ha terminado. Se requiere renovación para continuar gestionando tus ventas."),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                Navigator.pushAndRemoveUntil(
+                  context, 
+                  MaterialPageRoute(builder: (_) => const ActivationScreen()), 
+                  (route) => false
+                );
+              }, 
+              child: const Text("IR A ACTIVACIÓN")
+            ),
+          )
+        ],
+      ),
+    );
   }
 
   Future<void> cargarVentas() async {
@@ -187,12 +249,10 @@ class _HomeScreenState extends State<HomeScreen> {
     ),
   );
 
-  // 🔥 Verificamos si 'salir' es true Y si el widget sigue montado
   if (salir == true && mounted) {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('activado', false);
 
-    // 🔥 Volvemos a verificar 'mounted' después del segundo await
     if (!mounted) return;
 
     Navigator.pushAndRemoveUntil(
@@ -256,11 +316,10 @@ class _HomeScreenState extends State<HomeScreen> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 🔥 Mostramos los días restantes aquí
             Text(
               diasRestantesMsg, 
               style: TextStyle(
-                color: diasRestantesMsg.contains('expirada') ? Colors.red : Colors.grey.shade600, 
+                color: diasRestantesMsg.contains('expirada') || diasRestantesMsg.contains('Sin licencia') ? Colors.red : Colors.grey.shade600, 
                 fontSize: 13,
                 fontWeight: FontWeight.w500
               )
@@ -383,6 +442,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
+// ... Widgets de apoyo: _StatCard, _SaleCard, _CircleIconButton (se mantienen igual que antes)
 
 // ==========================================
 // WIDGETS DE APOYO

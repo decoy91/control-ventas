@@ -4,6 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+// Nuevas importaciones para la huella digital
+import 'package:firebase_app_installations/firebase_app_installations.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:uuid/uuid.dart';
 
 import '../repositories/cliente_repository.dart';
 import '../repositories/producto_repository.dart';
@@ -23,6 +27,9 @@ class _ActivationScreenState extends State<ActivationScreen> with SingleTickerPr
   final _codeCtrl = TextEditingController();
   bool _cargando = false;
   String _estadoSync = ""; 
+  
+  // Instancia de almacenamiento seguro
+  final _storage = const FlutterSecureStorage();
 
   // Variables para la animación de moneda
   late AnimationController _animationController;
@@ -30,7 +37,6 @@ class _ActivationScreenState extends State<ActivationScreen> with SingleTickerPr
   @override
   void initState() {
     super.initState();
-    // La animación se configura, pero NO se inicia (no hay .repeat() aquí)
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -44,16 +50,40 @@ class _ActivationScreenState extends State<ActivationScreen> with SingleTickerPr
     super.dispose();
   }
 
-  Future<String?> _getDeviceId() async {
+  // Nueva función robusta para generar la Huella Digital Única
+  Future<String> _getDeviceFingerprint() async {
     var deviceInfo = DeviceInfoPlugin();
+    String hardwareId = '';
+    String model = '';
+
+    // 1. Hardware ID y Modelo
     if (Platform.isAndroid) {
       var androidInfo = await deviceInfo.androidInfo;
-      return androidInfo.id;
+      hardwareId = androidInfo.id; 
+      model = androidInfo.model;
     } else if (Platform.isIOS) {
       var iosInfo = await deviceInfo.iosInfo;
-      return iosInfo.identifierForVendor;
+      hardwareId = iosInfo.identifierForVendor ?? 'unknown_ios';
+      model = iosInfo.utsname.machine;
     }
-    return 'unknown';
+
+    // 2. UUID persistente en Secure Storage
+    String? internalUuid = await _storage.read(key: 'internal_device_uuid');
+    if (internalUuid == null) {
+      internalUuid = const Uuid().v4();
+      await _storage.write(key: 'internal_device_uuid', value: internalUuid);
+    }
+
+    // 3. Firebase Installation ID (FID)
+    String fid = "no_fid";
+    try {
+      fid = await FirebaseInstallations.instance.getId();
+    } catch (e) {
+      fid = "error_fid";
+    }
+
+    // Retornamos la combinación única
+    return "${model}_${hardwareId}_${fid}_$internalUuid";
   }
 
   Future<void> _validarCodigo() async {
@@ -68,11 +98,12 @@ class _ActivationScreenState extends State<ActivationScreen> with SingleTickerPr
       _estadoSync = "Verificando...";
     });
 
-    // 🔥 INICIAMOS EL GIRO DE MONEDA
     _animationController.repeat();
 
     try {
-      final deviceId = await _getDeviceId();
+      // Usamos la nueva huella digital en lugar del ID simple
+      final deviceFingerprint = await _getDeviceFingerprint();
+      
       final querySnap = await FirebaseFirestore.instance
           .collection('licencias')
           .where('codigo_activacion', isEqualTo: codigoIngresado)
@@ -98,19 +129,21 @@ class _ActivationScreenState extends State<ActivationScreen> with SingleTickerPr
         if (fechaExp == null || ahora.isAfter(fechaExp.toDate())) {
           _stopAnimation();
           _mensaje("Esta licencia ha expirado.");
-        } else if (registradoId != null && registradoId != "" && registradoId != deviceId) {
+        } 
+        // Validación estricta con la huella digital completa
+        else if (registradoId != null && registradoId != "" && registradoId != deviceFingerprint) {
           _stopAnimation();
           _mensaje("Código vinculado a otro dispositivo.");
         } else {
           if (registradoId == null || registradoId == "") {
-            await doc.reference.update({'device_id': deviceId});
+            // Guardamos la huella digital completa en Firestore
+            await doc.reference.update({'device_id': deviceFingerprint});
           }
 
           final prefs = await SharedPreferences.getInstance();
           await prefs.setBool('activado', true);
           await prefs.setString('codigo_licencia', doc.id);
 
-          // Actualización de estados de sincronización
           setState(() => _estadoSync = "Clientes...");
           await ClienteRepository().recuperarClientesDesdeNube(doc.id);
           
@@ -137,7 +170,6 @@ class _ActivationScreenState extends State<ActivationScreen> with SingleTickerPr
     }
   }
 
-  // Función para detener la animación suavemente
   void _stopAnimation() {
     if (mounted) {
       setState(() {
@@ -145,7 +177,7 @@ class _ActivationScreenState extends State<ActivationScreen> with SingleTickerPr
         _estadoSync = "";
       });
       _animationController.stop();
-      _animationController.animateTo(0, duration: const Duration(milliseconds: 500)); // Regresa a posición frontal
+      _animationController.animateTo(0, duration: const Duration(milliseconds: 500));
     }
   }
 
@@ -169,7 +201,6 @@ class _ActivationScreenState extends State<ActivationScreen> with SingleTickerPr
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // LOGO CON EFECTO MONEDA ACTIVADO POR CARGA
                 AnimatedBuilder(
                   animation: _animationController,
                   builder: (context, child) {
@@ -196,7 +227,7 @@ class _ActivationScreenState extends State<ActivationScreen> with SingleTickerPr
                       ]
                     ),
                     child: Icon(
-                      _cargando ? Icons.sync : Icons.cloud_done_rounded, 
+                      _cargando ? Icons.sync : Icons.playlist_add_check_circle_outlined, 
                       size: 70, 
                       color: primaryColor
                     ),
@@ -229,7 +260,7 @@ class _ActivationScreenState extends State<ActivationScreen> with SingleTickerPr
                     children: [
                       TextField(
                         controller: _codeCtrl,
-                        enabled: !_cargando, // Bloqueamos el input mientras gira
+                        enabled: !_cargando,
                         textCapitalization: TextCapitalization.characters,
                         textAlign: TextAlign.center,
                         style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 4, fontSize: 18),
@@ -270,7 +301,7 @@ class _ActivationScreenState extends State<ActivationScreen> with SingleTickerPr
                 ),
                 const SizedBox(height: 40),
                 TextButton(
-                  onPressed: _cargando ? null : () {},
+                  onPressed: () => _mensaje("Contacta al Número: 9612312743"),
                   child: const Text("¿Necesitas ayuda?", style: TextStyle(color: Colors.grey)),
                 ),
               ],
